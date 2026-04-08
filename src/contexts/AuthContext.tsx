@@ -1,9 +1,12 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
-import { auth } from '../firebase/config'
+import { createContext, useContext, useState, type ReactNode } from 'react'
+
+interface MockUser {
+  uid: string
+  email: string
+}
 
 interface AuthContextType {
-  user: User | null
+  user: MockUser | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -11,24 +14,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+// TODO: Replace with Firebase auth when credentials are configured
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<MockUser | null>({ uid: 'dev', email: 'dev@local' })
+  const loading = false
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user)
-      setLoading(false)
-    })
-    return unsubscribe
-  }, [])
-
-  const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password)
+  const login = async (_email: string, _password: string) => {
+    setUser({ uid: 'dev', email: _email })
   }
 
   const logout = async () => {
-    await signOut(auth)
+    setUser(null)
   }
 
   return (

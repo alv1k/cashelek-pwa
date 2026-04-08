@@ -3,7 +3,9 @@ import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
-import FinancePage from './pages/FinancePage'
+import AnalyticsPage from './pages/AnalyticsPage'
+import TransactionsPage from './pages/TransactionsPage'
+import IncomePage from './pages/IncomePage'
 import GroceryPage from './pages/GroceryPage'
 import ReceiptPage from './pages/ReceiptPage'
 
@@ -14,7 +16,9 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            <Route path="/" element={<FinancePage />} />
+            <Route path="/" element={<AnalyticsPage />} />
+            <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/income" element={<IncomePage />} />
             <Route path="/grocery" element={<GroceryPage />} />
             <Route path="/receipt" element={<ReceiptPage />} />
           </Route>
