@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@nivo/bar": "^0.99.0",
+    "@nivo/core": "^0.99.0",
+    "@nivo/pie": "^0.99.0",
     "@tailwindcss/vite": "^4.2.2",
     "firebase": "^12.11.0",
     "framer-motion": "^12.38.0",
@@ -17,7 +20,6 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.0",
-    "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2",
     "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5",

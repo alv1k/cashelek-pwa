@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import logo from '../assets/casheleklogo.png'
 
 // Analytics — bar chart with pulse dot
 const IconAnalytics = () => (
@@ -65,18 +66,18 @@ export default function Layout() {
       <header className="header shrink-0">
         <div className="header-top">
           <div className="header-user">
-            <div className="header-avatar">
-              {(user?.email?.[0] || 'U').toUpperCase()}
-            </div>
-            <span className="header-greeting">Finance</span>
+            <img src={logo} alt="Cashelek" className="header-logo" />
           </div>
-          <button onClick={logout} className="header-logout" aria-label="Выйти">
+          <div className="header-right">
+            <span className="header-greeting">{user?.email?.split('@')[0] || 'User'}</span>
+            <button onClick={logout} className="header-logout" aria-label="Выйти">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
           </button>
+          </div>
         </div>
         <h1 className="header-title">{title}</h1>
       </header>

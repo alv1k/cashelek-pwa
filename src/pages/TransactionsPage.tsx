@@ -31,7 +31,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    const params: Record<string, string> = { limit: String(LIMIT), offset: String(page * LIMIT) }
+    const params: Record<string, string> = { limit: String(LIMIT), offset: String(page * LIMIT), exclude_category: 'доход' }
     if (filterCategory) params.category = filterCategory
     if (search) params.search = search
     api.getTransactions(params)
@@ -68,7 +68,7 @@ export default function TransactionsPage() {
         value={filterCategory}
         onChange={(v) => { setFilterCategory(v); setPage(0) }}
         placeholder="Все категории"
-        options={categories.map((c) => ({ value: c.category, label: c.category }))}
+        options={categories.filter((c) => c.category !== 'доход').map((c) => ({ value: c.category, label: c.category }))}
       />
 
       <p className="text-muted">

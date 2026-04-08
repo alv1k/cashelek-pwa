@@ -257,6 +257,11 @@ input, select, textarea, button {
   gap: 12px;
 }
 
+.header-logo {
+  border-radius: 10px;
+  object-fit: contain;
+}
+
 .header-avatar {
   width: 36px;
   height: 36px;
@@ -268,6 +273,12 @@ input, select, textarea, button {
   justify-content: center;
   font-size: 14px;
   font-weight: 600;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .header-greeting {

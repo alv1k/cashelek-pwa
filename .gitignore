@@ -31,3 +31,5 @@ dist-ssr
 # Data & deploy artifacts
 *.xlsx
 *.tar.gz
+
+.vercel

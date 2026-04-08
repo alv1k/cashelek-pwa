@@ -21,7 +21,7 @@ app.get('/api/health', async (req, res) => {
 // Get all transactions (with optional filters)
 app.get('/api/transactions', async (req, res) => {
   try {
-    const { category, from, to, search, limit = 100, offset = 0 } = req.query
+    const { category, exclude_category, from, to, search, limit = 100, offset = 0 } = req.query
     const conditions = []
     const params = []
     let i = 1
@@ -29,6 +29,10 @@ app.get('/api/transactions', async (req, res) => {
     if (category) {
       conditions.push(`category = $${i++}`)
       params.push(category)
+    }
+    if (exclude_category) {
+      conditions.push(`category != $${i++}`)
+      params.push(exclude_category)
     }
     if (from) {
       conditions.push(`date >= $${i++}`)
