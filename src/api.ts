@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://91.132.161.112:3080'
+const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://91.132.161.112:3080' : '')
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
