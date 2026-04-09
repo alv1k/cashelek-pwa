@@ -19,8 +19,8 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 2560 },
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
         },
       })
       streamRef.current = stream

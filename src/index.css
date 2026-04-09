@@ -495,9 +495,9 @@ input, select, textarea, button {
 }
 
 .receipt-camera-frame {
-  width: 85%;
-  max-width: 360px;
-  aspect-ratio: 3 / 5;
+  width: 65%;
+  max-width: 280px;
+  aspect-ratio: 2 / 3;
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-radius: 16px;
   position: relative;
