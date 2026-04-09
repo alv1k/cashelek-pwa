@@ -94,9 +94,31 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
     const imageData = ctx.getImageData(0, 0, w, h)
     const data = imageData.data
 
-    // Increase contrast and brightness for receipt text
-    const contrast = 1.3
-    const brightness = 10
+    // Measure average brightness first
+    let sum = 0
+    for (let i = 0; i < data.length; i += 16) { // sample every 4th pixel
+      sum += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
+    }
+    const avgBrightness = sum / (data.length / 16)
+
+    // Adaptive correction based on actual brightness
+    // Dark image (< 90): brighten more, mild contrast
+    // Normal (90-170): light contrast only
+    // Bright (> 170): no brightening, reduce overexposure
+    let contrast: number
+    let brightness: number
+
+    if (avgBrightness < 90) {
+      contrast = 1.15
+      brightness = Math.round((128 - avgBrightness) * 0.4)
+    } else if (avgBrightness > 170) {
+      contrast = 1.1
+      brightness = Math.round((128 - avgBrightness) * 0.3)
+    } else {
+      contrast = 1.1
+      brightness = 0
+    }
+
     const factor = (259 * (contrast * 128 + 255)) / (255 * (259 - contrast * 128))
 
     for (let i = 0; i < data.length; i += 4) {
