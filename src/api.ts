@@ -83,6 +83,13 @@ export const api = {
     return request<{ category: string }>(`/api/suggest-category?name=${encodeURIComponent(name)}`)
   },
 
+  parseReceipt(text: string) {
+    return request<{ items: Array<{ name: string; price: number; quantity: number }> }>('/api/parse-receipt', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    })
+  },
+
   health() {
     return request<{ status: string }>('/api/health')
   },

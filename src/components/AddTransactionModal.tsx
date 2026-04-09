@@ -13,6 +13,7 @@ interface Props {
 interface ScannedItem {
   name: string
   price: string
+  quantity: number
   selected: boolean
 }
 
@@ -95,30 +96,35 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     if (!image) return
     setScanning(true)
     try {
+      // Step 1: OCR with Tesseract
       const { data } = await Tesseract.recognize(image, 'rus+eng', {})
-      const items = parseReceipt(data.text)
+      const ocrText = data.text
+
+      if (!ocrText.trim()) {
+        alert('Не удалось распознать текст')
+        return
+      }
+
+      // Step 2: Parse with LLM
+      const result = await api.parseReceipt(ocrText)
+      const items: ScannedItem[] = result.items.map((item) => ({
+        name: item.name,
+        price: String(item.price),
+        quantity: item.quantity,
+        selected: true,
+      }))
+
+      if (!items.length) {
+        alert('Не найдено товаров на чеке')
+        return
+      }
+
       setScannedItems(items)
     } catch {
       alert('Ошибка распознавания')
     } finally {
       setScanning(false)
     }
-  }
-
-  function parseReceipt(text: string): ScannedItem[] {
-    const lines = text.split('\n').filter((l) => l.trim())
-    const results: ScannedItem[] = []
-    for (const line of lines) {
-      const match = line.match(/(.+?)\s+([\d.,]+)\s*[₽р]?\s*$/)
-      if (match) {
-        results.push({
-          name: match[1].trim(),
-          price: match[2].replace(',', '.'),
-          selected: true,
-        })
-      }
-    }
-    return results
   }
 
   function toggleItem(i: number) {
@@ -134,12 +140,13 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     try {
       for (const item of selected) {
         const p = parseFloat(item.price) || 0
+        const q = item.quantity || 1
         await api.createTransaction({
           name: item.name,
           date: scanDate,
           price: p,
-          quantity: 1,
-          amount: p,
+          quantity: q,
+          amount: p * q,
           category: scanCategory,
           comment: scanComment,
         })
@@ -290,7 +297,10 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
                       }`}>
                         {item.selected && '✓'}
                       </span>
-                      <span className="text-sm flex-1 truncate">{item.name}</span>
+                      <span className="text-sm flex-1 truncate">
+                        {item.name}
+                        {item.quantity > 1 && <span className="text-muted ml-1">x{item.quantity}</span>}
+                      </span>
                       <span className="text-sm font-semibold tabular-nums">{item.price} ₽</span>
                     </div>
                   ))}
