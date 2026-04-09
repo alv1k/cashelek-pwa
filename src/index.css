@@ -465,3 +465,166 @@ input, select, textarea, button {
   background: var(--color-primary-dark);
   transform: scale(1.05);
 }
+
+/* Receipt Camera — full-screen viewfinder */
+.receipt-camera {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.receipt-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Semi-transparent overlay with framing guide */
+.receipt-camera-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.receipt-camera-frame {
+  width: 85%;
+  max-width: 360px;
+  aspect-ratio: 3 / 5;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  position: relative;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+}
+
+/* Corner accents */
+.frame-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: var(--color-primary);
+  border-style: solid;
+  border-width: 0;
+}
+
+.frame-tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-radius: 16px 0 0 0; }
+.frame-tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-radius: 0 16px 0 0; }
+.frame-bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-radius: 0 0 0 16px; }
+.frame-br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-radius: 0 0 16px 0; }
+
+.receipt-camera-hint {
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* Flash animation */
+.receipt-camera-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  animation: cam-flash 0.3s ease-out forwards;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes cam-flash {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* Top bar (close & torch) */
+.receipt-camera-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 20px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
+
+.receipt-camera-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.receipt-camera-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.receipt-camera-btn-active {
+  background: var(--color-primary);
+}
+
+.receipt-camera-btn-active:hover {
+  background: var(--color-primary-dark);
+}
+
+/* Bottom controls */
+.receipt-camera-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 32px 20px;
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  z-index: 10;
+}
+
+.receipt-camera-shutter {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: transparent;
+  border: 4px solid #fff;
+  padding: 4px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.receipt-camera-shutter:active {
+  transform: scale(0.92);
+}
+
+.receipt-camera-shutter:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.receipt-camera-shutter-inner {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #fff;
+  transition: background 0.15s;
+}
+
+.receipt-camera-shutter:hover .receipt-camera-shutter-inner {
+  background: var(--color-primary);
+}

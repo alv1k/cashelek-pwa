@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Tesseract from 'tesseract.js'
 import { api } from '../api'
 import Select from './Select'
+import ReceiptCamera from './ReceiptCamera'
 
 interface Props {
   categories: string[]
@@ -52,10 +53,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
   const [scanComment, setScanComment] = useState('')
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10))
   const fileRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const [streaming, setStreaming] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
 
   const amount = (parseFloat(price) || 0) * (parseFloat(quantity) || 0)
 
@@ -88,37 +86,9 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     reader.readAsDataURL(file)
   }
 
-  async function startCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-      setStreaming(true)
-    } catch {
-      alert('Нет доступа к камере')
-    }
-  }
-
-  function capture() {
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d')!.drawImage(video, 0, 0)
-    setImage(canvas.toDataURL('image/jpeg', 0.9))
-    stopCamera()
-  }
-
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
-    setStreaming(false)
+  function handleCameraCapture(dataUrl: string) {
+    setImage(dataUrl)
+    setShowCamera(false)
   }
 
   async function recognize() {
@@ -268,9 +238,9 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
 
         {mode === 'scan' && (
           <>
-            {!image && !streaming && (
+            {!image && !showCamera && (
               <div className="flex gap-3">
-                <button className="btn btn-primary flex-1" onClick={startCamera}>
+                <button className="btn btn-primary flex-1" onClick={() => setShowCamera(true)}>
                   Камера
                 </button>
                 <label className="btn btn-secondary flex-1 text-center cursor-pointer">
@@ -280,25 +250,12 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
               </div>
             )}
 
-            {streaming && (
-              <div className="relative rounded-2xl overflow-hidden border border-[var(--color-border)]">
-                <video ref={videoRef} className="w-full" playsInline muted />
-                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
-                  <button
-                    onClick={capture}
-                    className="w-14 h-14 rounded-full bg-white border-4 border-[var(--color-primary)] shadow-lg"
-                  />
-                  <button
-                    onClick={stopCamera}
-                    className="modal-close self-center"
-                  >
-                    X
-                  </button>
-                </div>
-              </div>
+            {showCamera && (
+              <ReceiptCamera
+                onCapture={handleCameraCapture}
+                onClose={() => setShowCamera(false)}
+              />
             )}
-
-            <canvas ref={canvasRef} className="hidden" />
 
             {image && scannedItems.length === 0 && (
               <>
