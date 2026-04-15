@@ -17,14 +17,20 @@ interface ScannedItem {
   selected: boolean
 }
 
+interface ManualItem {
+  name: string
+  price: string
+  quantity: string
+}
+
 type Mode = 'manual' | 'scan'
 
 export default function AddTransactionModal({ categories, onClose, onSaved }: Props) {
   const [mode, setMode] = useState<Mode>('manual')
 
   // Manual form
+  const [manualItems, setManualItems] = useState<ManualItem[]>([])
   const [name, setName] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [category, setCategory] = useState('')
@@ -46,6 +52,20 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     return () => clearTimeout(timer)
   }, [name, mode])
 
+  // Common date for manual items
+  const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10))
+
+  // Reset form when switching modes
+  useEffect(() => {
+    setManualItems([])
+    setName('')
+    setPrice('')
+    setQuantity('1')
+    setCategory('')
+    setComment('')
+    setAutoCategory(false)
+  }, [mode])
+
   // Scan
   const [image, setImage] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -56,21 +76,40 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
   const fileRef = useRef<HTMLInputElement>(null)
   const [showCamera, setShowCamera] = useState(false)
 
-  const amount = (parseFloat(price) || 0) * (parseFloat(quantity) || 0)
-
-  async function handleManualSave() {
+  const addManualItem = () => {
     if (!name.trim() || !price) return
+    setManualItems((prev) => [...prev, { name: name.trim(), price, quantity }])
+    setName('')
+    setPrice('')
+    setQuantity('1')
+    setAutoCategory(false)
+  }
+
+  const removeManualItem = (index: number) => {
+    setManualItems((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const manualTotal = manualItems.reduce((sum, item) => {
+    return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1)
+  }, 0)
+
+  async function saveAllManual() {
+    if (!manualItems.length) return
     setSaving(true)
     try {
-      await api.createTransaction({
-        name: name.trim(),
-        date,
-        price: parseFloat(price),
-        quantity: parseFloat(quantity) || 1,
-        amount,
-        category,
-        comment,
-      })
+      for (const item of manualItems) {
+        const p = parseFloat(item.price) || 0
+        const q = parseFloat(item.quantity) || 1
+        await api.createTransaction({
+          name: item.name,
+          date: manualDate,
+          price: p,
+          quantity: q,
+          amount: p * q,
+          category,
+          comment,
+        })
+      }
       onSaved()
     } catch {
       alert('Ошибка сохранения')
@@ -79,7 +118,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     }
   }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
@@ -179,42 +218,52 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
 
         {mode === 'manual' && (
           <>
-            <input
-              className="input"
-              placeholder="Название"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            {/* Common fields: date and comment */}
             <input
               className="input"
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              value={manualDate}
+              onChange={(e) => setManualDate(e.target.value)}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <input
+              className="input"
+              placeholder="Комментарий (общий для всех товаров)"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+
+            {/* Item input section */}
+            <div className="flex flex-col gap-3 pt-3 border-t border-[var(--color-border)]">
+              <p className="text-sm font-medium">Добавить товар</p>
               <input
                 className="input"
-                type="number"
-                step="0.01"
-                placeholder="Цена"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                placeholder="Название"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
-              <input
-                className="input"
-                type="number"
-                step="0.01"
-                placeholder="Кол-во"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-              />
-            </div>
-            {amount > 0 && (
-              <p className="text-sm font-semibold text-right">
-                Сумма: {amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
-              </p>
-            )}
-            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  className="input"
+                  type="number"
+                  step="0.01"
+                  placeholder="Цена"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                />
+                <input
+                  className="input"
+                  type="number"
+                  step="0.01"
+                  placeholder="Кол-во"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                />
+              </div>
+              {(parseFloat(price) || 0) * (parseFloat(quantity) || 1) > 0 && (
+                <p className="text-sm font-semibold text-right">
+                  Сумма: {((parseFloat(price) || 0) * (parseFloat(quantity) || 1)).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+                </p>
+              )}
               <Select
                 value={category}
                 onChange={(v) => { setCategory(v); setAutoCategory(false) }}
@@ -222,23 +271,57 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
                 options={categories.map((c) => ({ value: c, label: c }))}
               />
               {autoCategory && category && (
-                <p className="text-muted mt-1" style={{ color: 'var(--color-primary)' }}>
+                <p className="text-muted -mt-2" style={{ color: 'var(--color-primary)' }}>
                   Автоподбор: {category}
                 </p>
               )}
+              <button
+                className="btn btn-secondary w-full"
+                disabled={!name.trim() || !price}
+                onClick={addManualItem}
+              >
+                + Добавить товар
+              </button>
             </div>
-            <input
-              className="input"
-              placeholder="Комментарий"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
+
+            {/* Items list */}
+            {manualItems.length > 0 && (
+              <div className="flex flex-col gap-2 pt-3 border-t border-[var(--color-border)]">
+                <p className="text-muted text-sm">
+                  {manualItems.length} товар(ов) · Итого: {manualTotal.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+                </p>
+                <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+                  {manualItems.map((item, i) => {
+                    const itemSum = (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1)
+                    return (
+                      <div key={i} className="card-compact flex items-center gap-3">
+                        <span className="text-sm flex-1 truncate">
+                          {item.name}
+                          {parseFloat(item.quantity) !== 1 && (
+                            <span className="text-muted ml-1">x{item.quantity}</span>
+                          )}
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums">{itemSum.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
+                        <button
+                          className="w-6 h-6 flex items-center justify-center text-muted hover:text-[var(--color-danger)]"
+                          onClick={() => removeManualItem(i)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Save all */}
             <button
               className="btn btn-primary w-full"
-              disabled={!name.trim() || !price || saving}
-              onClick={handleManualSave}
+              disabled={!manualItems.length || saving}
+              onClick={saveAllManual}
             >
-              {saving ? 'Сохраняю...' : 'Сохранить'}
+              {saving ? 'Сохраняю...' : `Сохранить всё (${manualItems.length})`}
             </button>
           </>
         )}

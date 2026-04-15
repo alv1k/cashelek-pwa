@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, type Transaction } from '../api'
-import { formatMoney } from '../utils'
+import { formatMoney, formatDateShort } from '../utils'
 
 export default function IncomePage() {
   const [incomes, setIncomes] = useState<Transaction[]>([])
@@ -162,7 +162,7 @@ export default function IncomePage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{t.name}</p>
               <p className="text-muted mt-1">
-                {t.date.slice(0, 10)}
+                {formatDateShort(t.date)}
                 {t.comment ? ` · ${t.comment}` : ''}
               </p>
             </div>
