@@ -1,18 +1,12 @@
 const getApiUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL
-  if (envUrl) {
-    if (window.location.protocol === 'https:' && envUrl.startsWith('http://')) {
-      return envUrl.replace('http://', 'https://')
-    }
-    return envUrl
+  // If we're on Vercel (production), ALWAYS use the proxy (relative path)
+  // This avoids Mixed Content and SSL errors.
+  if (window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1')) {
+    return ''
   }
-  
-  if (window.location.hostname === 'localhost') {
-    return 'http://91.132.161.112:3080'
-  }
-  
-  // Use relative path (Vercel proxy) for production
-  return ''
+
+  // Local development
+  return import.meta.env.VITE_API_URL || 'http://91.132.161.112:3080'
 }
 
 const API_URL = getApiUrl()
