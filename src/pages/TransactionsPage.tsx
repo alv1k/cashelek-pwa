@@ -4,7 +4,7 @@ import AddTransactionModal from '../components/AddTransactionModal'
 import EditTransactionModal from '../components/EditTransactionModal'
 import Select from '../components/Select'
 
-import { formatMoney } from '../utils'
+import { formatMoney, formatDateShort } from '../utils'
 
 const LIMIT = 50
 
@@ -94,7 +94,7 @@ export default function TransactionsPage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{t.name}</p>
               <p className="text-muted mt-1">
-                {t.date} · {t.category}
+                {formatDateShort(t.date)} · {t.category}
                 {t.comment ? ` · ${t.comment}` : ''}
               </p>
             </div>
