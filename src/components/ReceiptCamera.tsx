@@ -43,7 +43,7 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
   }, [onClose])
 
   useEffect(() => {
-    startCamera()
+    void Promise.resolve().then(() => startCamera())
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
@@ -59,7 +59,9 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
         advanced: [{ torch: next } as MediaTrackConstraintSet & { torch: boolean }],
       })
       setTorchOn(next)
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to toggle torch', e)
+    }
   }
 
   function capture() {

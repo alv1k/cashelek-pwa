@@ -50,6 +50,10 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
   const [image, setImage] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([])
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editPrice, setEditPrice] = useState('')
+  const [editQuantity, setEditQuantity] = useState(1)
   const [scanCategory, setScanCategory] = useState('продукты')
   const [scanComment, setScanComment] = useState('')
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10))
@@ -128,9 +132,37 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
   }
 
   function toggleItem(i: number) {
+    if (editingIndex === i) return // Don't toggle while editing
     setScannedItems((prev) =>
       prev.map((item, idx) => idx === i ? { ...item, selected: !item.selected } : item)
     )
+  }
+
+  function startEditing(i: number, e: React.MouseEvent) {
+    e.stopPropagation()
+    const item = scannedItems[i]
+    setEditingIndex(i)
+    setEditName(item.name)
+    setEditPrice(item.price)
+    setEditQuantity(item.quantity)
+  }
+
+  function cancelEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingIndex(null)
+  }
+
+  function saveEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (editingIndex === null) return
+    setScannedItems((prev) =>
+      prev.map((item, idx) =>
+        idx === editingIndex
+          ? { ...item, name: editName, price: editPrice, quantity: editQuantity }
+          : item
+      )
+    )
+    setEditingIndex(null)
   }
 
   async function saveScanned() {
@@ -283,25 +315,69 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
             {scannedItems.length > 0 && (
               <>
                 <p className="text-muted">{scannedItems.filter((i) => i.selected).length} из {scannedItems.length} выбрано</p>
-                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
                   {scannedItems.map((item, i) => (
-                    <div
-                      key={i}
-                      onClick={() => toggleItem(i)}
-                      className={`card-compact flex items-center gap-3 cursor-pointer transition-opacity ${!item.selected ? 'opacity-40' : ''}`}
-                    >
-                      <span className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center text-xs ${
-                        item.selected
-                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                          : 'border-[var(--color-border)]'
-                      }`}>
-                        {item.selected && '✓'}
-                      </span>
-                      <span className="text-sm flex-1 truncate">
-                        {item.name}
-                        {item.quantity > 1 && <span className="text-muted ml-1">x{item.quantity}</span>}
-                      </span>
-                      <span className="text-sm font-semibold tabular-nums">{item.price} ₽</span>
+                    <div key={i} className="flex flex-col gap-2">
+                      <div
+                        onClick={() => toggleItem(i)}
+                        className={`card-compact flex items-center gap-3 cursor-pointer transition-opacity ${!item.selected ? 'opacity-40' : ''}`}
+                      >
+                        <span className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center text-xs ${
+                          item.selected
+                            ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                            : 'border-[var(--color-border)]'
+                        }`}>
+                          {item.selected && '✓'}
+                        </span>
+                        <span className="text-sm flex-1 truncate">
+                          {item.name}
+                          {item.quantity > 1 && <span className="text-muted ml-1">x{item.quantity}</span>}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold tabular-nums">{item.price} ₽</span>
+                          <button
+                            className="text-muted hover:text-[var(--color-primary)] p-1"
+                            onClick={(e) => startEditing(i, e)}
+                          >
+                            ✎
+                          </button>
+                        </div>
+                      </div>
+
+                      {editingIndex === i && (
+                        <div className="card-compact bg-[var(--color-surface-light)] border-[var(--color-primary)] flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            className="input"
+                            style={{ padding: '8px 12px' }}
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            placeholder="Название"
+                            autoFocus
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              className="input"
+                              style={{ padding: '8px 12px' }}
+                              type="number"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              placeholder="Цена"
+                            />
+                            <input
+                              className="input"
+                              style={{ padding: '8px 12px' }}
+                              type="number"
+                              value={editQuantity}
+                              onChange={(e) => setEditQuantity(Number(e.target.value))}
+                              placeholder="Кол-во"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button className="btn btn-secondary flex-1 py-2 text-xs" onClick={cancelEdit}>Отмена</button>
+                            <button className="btn btn-primary flex-1 py-2 text-xs" onClick={saveEdit}>Готово</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

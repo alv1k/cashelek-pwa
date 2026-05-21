@@ -191,6 +191,37 @@ app.get('/api/suggest-category', async (req, res) => {
   }
 })
 
+// Parse receipt text into items
+app.post('/api/parse-receipt', (req, res) => {
+  try {
+    const { text } = req.body
+    if (!text) return res.json({ items: [] })
+
+    const lines = text.split('\n').filter((l) => l.trim())
+    const items = []
+    
+    for (const line of lines) {
+      // Common receipt patterns: 
+      // "Product Name 123.45"
+      // "Product Name 123.45 * 1.000"
+      // "123.45 * 1.000 = 123.45"
+      
+      const priceMatch = line.match(/(.+?)\s+([\d.,]+)\s*[₽р]?\s*$/)
+      if (priceMatch) {
+        const name = priceMatch[1].trim()
+        const price = parseFloat(priceMatch[2].replace(',', '.'))
+        if (!isNaN(price)) {
+          items.push({ name, price, quantity: 1 })
+        }
+      }
+    }
+    
+    res.json({ items })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`Finance API running on port ${PORT}`)
 })

@@ -30,7 +30,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    void Promise.resolve().then(() => { if (!cancelled) setLoading(true) })
     const params: Record<string, string> = { limit: String(LIMIT), offset: String(page * LIMIT), exclude_category: 'доход' }
     if (filterCategory) params.category = filterCategory
     if (search) params.search = search

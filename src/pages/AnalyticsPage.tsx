@@ -87,7 +87,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    void Promise.resolve().then(() => { if (!cancelled) setLoading(true) })
     const params: Record<string, string> = {}
     if (range.from) params.from = range.from
     if (range.to) params.to = range.to
@@ -100,7 +100,7 @@ export default function AnalyticsPage() {
       .catch((e) => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [period, offset, filterCategory])
+  }, [range, filterCategory])
 
   const incomeCategories = categories.filter((c) => c.category === 'доход')
   const expenseCategories = categories.filter((c) => c.category !== 'доход')

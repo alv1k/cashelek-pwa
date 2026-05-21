@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, type ReactNode } from 'react'
 
 interface MockUser {
@@ -19,8 +20,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MockUser | null>({ uid: 'dev', email: 'dev@local' })
   const loading = false
 
-  const login = async (_email: string, _password: string) => {
+  const login = async (_email: string, password: string) => {
     setUser({ uid: 'dev', email: _email })
+    console.log('Logging in with', _email, password)
   }
 
   const logout = async () => {
