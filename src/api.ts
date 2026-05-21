@@ -1,4 +1,21 @@
-const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'https://91.132.161.112:3080' : '')
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) {
+    if (window.location.protocol === 'https:' && envUrl.startsWith('http://')) {
+      return envUrl.replace('http://', 'https://')
+    }
+    return envUrl
+  }
+  
+  if (window.location.hostname === 'localhost') {
+    return 'http://91.132.161.112:3080'
+  }
+  
+  // Use relative path (Vercel proxy) for production
+  return ''
+}
+
+const API_URL = getApiUrl()
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
