@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, type Transaction } from '../api'
 import { formatMoney, formatDateShort } from '../utils'
+import Select from '../components/Select'
+import { INCOME_CATEGORIES, isIncomeCategory } from '../categories'
 
 export default function IncomePage() {
   const [incomes, setIncomes] = useState<Transaction[]>([])
@@ -15,6 +17,7 @@ export default function IncomePage() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [amount, setAmount] = useState('')
   const [comment, setComment] = useState('')
+  const [incomeCategory, setIncomeCategory] = useState('доход')
   const [saving, setSaving] = useState(false)
 
   // Edit
@@ -23,8 +26,14 @@ export default function IncomePage() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    api.getTransactions({ category: 'доход', limit: '200' })
-      .then((res) => { if (!cancelled) { setIncomes(res.data); setTotal(res.total) } })
+    api.getTransactions({ limit: '500' })
+      .then((res) => {
+        if (!cancelled) {
+          const incomeTx = res.data.filter((t) => isIncomeCategory(t.category))
+          setIncomes(incomeTx)
+          setTotal(incomeTx.length)
+        }
+      })
       .catch((e) => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -37,6 +46,7 @@ export default function IncomePage() {
     setDate(new Date().toISOString().slice(0, 10))
     setAmount('')
     setComment('')
+    setIncomeCategory('доход')
     setEditId(null)
     setShowForm(false)
   }
@@ -46,6 +56,7 @@ export default function IncomePage() {
     setDate(t.date.slice(0, 10))
     setAmount(String(t.amount))
     setComment(t.comment)
+    setIncomeCategory(t.category || 'доход')
     setEditId(t.id)
     setShowForm(true)
   }
@@ -60,7 +71,7 @@ export default function IncomePage() {
         price: parseFloat(amount),
         quantity: 1,
         amount: parseFloat(amount),
-        category: 'доход',
+        category: incomeCategory,
         comment,
       }
       if (editId) {
@@ -134,6 +145,12 @@ export default function IncomePage() {
               onChange={(e) => setAmount(e.target.value)}
             />
           </div>
+          <Select
+            value={incomeCategory}
+            onChange={setIncomeCategory}
+            placeholder="Категория дохода"
+            options={INCOME_CATEGORIES.map((c) => ({ value: c, label: c }))}
+          />
           <input
             className="input"
             placeholder="Комментарий"

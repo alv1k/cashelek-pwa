@@ -4,6 +4,7 @@ import { ResponsiveBar } from '@nivo/bar'
 import { api, type CategoryStat, type MonthlySummary } from '../api'
 import { formatMoney } from '../utils'
 import Select from '../components/Select'
+import { isIncomeCategory } from '../categories'
 
 const COLORS = [
   '#3fb950', '#58a6ff', '#f85149', '#d29922', '#bc8cff',
@@ -102,8 +103,8 @@ export default function AnalyticsPage() {
     return () => { cancelled = true }
   }, [range, filterCategory])
 
-  const incomeCategories = categories.filter((c) => c.category === 'доход')
-  const expenseCategories = categories.filter((c) => c.category !== 'доход')
+  const incomeCategories = categories.filter((c) => isIncomeCategory(c.category))
+  const expenseCategories = categories.filter((c) => !isIncomeCategory(c.category))
 
   const totalIncome = incomeCategories.reduce((s, c) => s + parseFloat(c.total), 0)
   const totalExpense = expenseCategories.reduce((s, c) => s + parseFloat(c.total), 0)
@@ -112,7 +113,7 @@ export default function AnalyticsPage() {
   const monthlyData = Object.entries(
     monthly.reduce<Record<string, { income: number; expense: number }>>((acc, r) => {
       if (!acc[r.month]) acc[r.month] = { income: 0, expense: 0 }
-      if (r.category === 'доход') {
+      if (isIncomeCategory(r.category)) {
         acc[r.month].income += parseFloat(r.total)
       } else {
         acc[r.month].expense += parseFloat(r.total)
