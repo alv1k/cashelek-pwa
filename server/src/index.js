@@ -222,6 +222,37 @@ app.post('/api/parse-receipt', (req, res) => {
   }
 })
 
+// One-time migration: re-categorize income transactions based on name
+const INCOME_RULES = [
+  { match: /^такси$/i, category: 'такси' },
+  { match: /^(зп |за )?Айсен/i, category: 'зп Айсен' },
+  { match: /^зп Алена/i, category: 'зп Алена' },
+  { match: /^аванс НВК/i, category: 'аванс НВК Саха' },
+  { match: /^(нвк саха|НВК Саха|зп НВК)/i, category: 'зп НВК Саха' },
+  { match: /^(больничный|Помощь от родственников)/i, category: 'зп Айсен' },
+]
+
+app.post('/api/migrate-income-categories', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, name, category FROM transactions WHERE category = 'доход'"
+    )
+    let updated = 0
+    const changes = []
+    for (const row of rows) {
+      const rule = INCOME_RULES.find((r) => r.match.test(row.name.trim()))
+      if (rule) {
+        await pool.query('UPDATE transactions SET category = $1 WHERE id = $2', [rule.category, row.id])
+        updated++
+        changes.push({ name: row.name, category: rule.category })
+      }
+    }
+    res.json({ updated, total: rows.length, changes })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`Finance API running on port ${PORT}`)
 })
