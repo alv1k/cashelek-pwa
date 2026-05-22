@@ -127,7 +127,14 @@ export default function AnalyticsPage() {
     }))
     .sort((a, b) => a.month.localeCompare(b.month))
 
-  const pieData = expenseCategories.map((c, i) => ({
+  const expensePieData = expenseCategories.map((c, i) => ({
+    id: c.category || 'без категории',
+    label: c.category || 'без категории',
+    value: Math.round(parseFloat(c.total)),
+    color: COLORS[i % COLORS.length],
+  }))
+
+  const incomePieData = incomeCategories.map((c, i) => ({
     id: c.category || 'без категории',
     label: c.category || 'без категории',
     value: Math.round(parseFloat(c.total)),
@@ -268,14 +275,14 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* Pie chart */}
-      {!loading && pieData.length > 0 && (
+      {/* Expense Pie chart */}
+      {!loading && expensePieData.length > 0 && (
         <div className="card">
           <h3 className="text-muted mb-4 font-medium">Расходы по категориям</h3>
           <div style={{ height: 260 }}>
             <ResponsivePie
-              data={pieData}
-              colors={pieData.map((d) => d.color)}
+              data={expensePieData}
+              colors={expensePieData.map((d) => d.color)}
               margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
               innerRadius={0.55}
               padAngle={1.5}
@@ -303,7 +310,7 @@ export default function AnalyticsPage() {
             />
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">
-            {pieData.map((d) => (
+            {expensePieData.map((d) => (
               <div key={d.id} className="flex items-center gap-2 text-xs py-1">
                 <span
                   className="w-3 h-3 rounded-full shrink-0"
@@ -317,7 +324,56 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {!loading && pieData.length === 0 && monthlyData.length === 0 && (
+      {/* Income Pie chart */}
+      {!loading && incomePieData.length > 0 && (
+        <div className="card">
+          <h3 className="text-muted mb-4 font-medium">Доходы по категориям</h3>
+          <div style={{ height: 260 }}>
+            <ResponsivePie
+              data={incomePieData}
+              colors={incomePieData.map((d) => d.color)}
+              margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+              innerRadius={0.55}
+              padAngle={1.5}
+              cornerRadius={4}
+              borderWidth={0}
+              activeOuterRadiusOffset={6}
+              theme={nivoTheme}
+              enableArcLinkLabels={false}
+              enableArcLabels={false}
+              tooltip={({ datum }) => (
+                <div style={{
+                  background: '#161b22',
+                  border: '1px solid #30363d',
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: datum.color }} />
+                  <span style={{ color: '#f0f3f6', fontSize: 13 }}>{datum.label}: {formatMoney(datum.value)}</span>
+                </div>
+              )}
+              motionConfig="gentle"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {incomePieData.map((d) => (
+              <div key={d.id} className="flex items-center gap-2 text-xs py-1">
+                <span
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ background: d.color }}
+                />
+                <span className="truncate text-muted">{d.label}</span>
+                <span className="ml-auto font-medium tabular-nums">{formatMoney(d.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!loading && expensePieData.length === 0 && incomePieData.length === 0 && monthlyData.length === 0 && (
         <div className="text-center py-16">
           <p className="text-muted text-sm">Нет данных за выбранный период</p>
         </div>
