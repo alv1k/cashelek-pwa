@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { ResponsivePie } from '@nivo/pie'
 import { ResponsiveBar } from '@nivo/bar'
-import { api, type CategoryStat, type MonthlySummary } from '../api'
+import { api, type CategoryStat, type MonthlySummary, type Transaction } from '../api'
 import { formatMoney } from '../utils'
 import Select from '../components/Select'
 import { isIncomeCategory } from '../categories'
@@ -103,6 +103,39 @@ export default function AnalyticsPage() {
     return () => { cancelled = true }
   }, [range, filterCategory])
 
+  const [incomeTxDetails, setIncomeTxDetails] = useState<Transaction[]>([])
+
+  useEffect(() => {
+    if (!range.from && !range.to) {
+      api.getTransactions({ limit: '500' }).then((res) => {
+        setIncomeTxDetails(res.data.filter((t) => isIncomeCategory(t.category)))
+      })
+    } else {
+      const params: Record<string, string> = { limit: '500' }
+      if (range.from) params.from = range.from
+      if (range.to) params.to = range.to
+      api.getTransactions(params).then((res) => {
+        setIncomeTxDetails(res.data.filter((t) => isIncomeCategory(t.category)))
+      })
+    }
+  }, [range])
+
+  function classifyIncome(name: string): string {
+    const lower = name.toLowerCase()
+    if (/такси/.test(lower)) return 'такси'
+    if (/^(зп |за )?айсен/.test(lower) || /больничн/.test(lower) || /помощь от родственник/.test(lower)) return 'зп Айсен'
+    if (/алена/.test(lower) || /алёна/.test(lower)) return 'зп Алена'
+    if (/аванс/.test(lower) && /нвк/.test(lower)) return 'аванс НВК Саха'
+    if (/нвк/.test(lower)) return 'зп НВК Саха'
+    return 'доход'
+  }
+
+  const incomeBySubcategory = new Map<string, number>()
+  for (const tx of incomeTxDetails) {
+    const sub = classifyIncome(tx.name)
+    incomeBySubcategory.set(sub, (incomeBySubcategory.get(sub) || 0) + Number(tx.amount))
+  }
+
   const incomeCategories = categories.filter((c) => isIncomeCategory(c.category))
   const expenseCategories = categories.filter((c) => !isIncomeCategory(c.category))
 
@@ -135,12 +168,15 @@ export default function AnalyticsPage() {
     color: COLORS[i % COLORS.length],
   }))
 
-  const incomePieData = incomeCategories.map((c, i) => ({
-    id: c.category || 'без категории',
-    label: c.category || 'без категории',
-    value: Math.round(parseFloat(c.total)),
-    color: COLORS[i % COLORS.length],
-  }))
+  const incomePieData = Array.from(incomeBySubcategory.entries())
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value], i) => ({
+      id: name,
+      label: name,
+      value: Math.round(value),
+      color: COLORS[i % COLORS.length],
+    }))
 
   if (error) {
     return (
