@@ -1,8 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
 import Tesseract from 'tesseract.js'
+import jsQR from 'jsqr'
 import { api } from '../api'
 import Select from './Select'
 import ReceiptCamera from './ReceiptCamera'
+import { parseProverkachekaHTML } from '../receiptParser'
+
+async function getQRCodeFromImage(dataUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        resolve(null)
+        return
+      }
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const code = jsQR(imageData.data, imageData.width, imageData.height)
+      resolve(code ? code.data : null)
+    }
+    img.onerror = () => resolve(null)
+    img.src = dataUrl
+  })
+}
 
 interface Props {
   categories: string[]
@@ -79,6 +103,8 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10))
   const fileRef = useRef<HTMLInputElement>(null)
   const [showCamera, setShowCamera] = useState(false)
+  const [qrString, setQrString] = useState<string | null>(null)
+  const [pastedHTML, setPastedHTML] = useState('')
 
   const addManualItem = () => {
     if (!name.trim() || !price) return
@@ -139,16 +165,24 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     if (!image) return
     setScanning(true)
     try {
-      // Step 1: OCR with Tesseract
+      // Step 1: Detect QR Code
+      const qrData = await getQRCodeFromImage(image)
+      if (qrData) {
+        setQrString(qrData)
+        // We don't return here, we still try OCR as a fallback
+      }
+
+      // Step 2: OCR with Tesseract
       const { data } = await Tesseract.recognize(image, 'rus+eng', {})
       const ocrText = data.text
 
       if (!ocrText.trim()) {
-        alert('Не удалось распознать текст')
+        if (!qrData) alert('Не удалось распознать текст')
+        setScanning(false)
         return
       }
 
-      // Step 2: Parse with LLM
+      // Step 3: Parse with basic logic
       const result = await api.parseReceipt(ocrText)
       const items: ScannedItem[] = result.items.map((item) => ({
         name: item.name,
@@ -157,17 +191,33 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
         selected: true,
       }))
 
-      if (!items.length) {
+      if (items.length > 0) {
+        setScannedItems(items)
+      } else if (!qrData) {
         alert('Не найдено товаров на чеке')
-        return
       }
-
-      setScannedItems(items)
     } catch {
       alert('Ошибка распознавания')
     } finally {
       setScanning(false)
     }
+  }
+
+  function handlePaste() {
+    if (!pastedHTML.trim()) return
+    const items = parseProverkachekaHTML(pastedHTML)
+    if (items.length === 0) {
+      alert('Не удалось извлечь товары из вставленного текста')
+      return
+    }
+    
+    const scanned: ScannedItem[] = items.map(item => ({
+      ...item,
+      selected: true
+    }))
+    
+    setScannedItems(scanned)
+    setPastedHTML('')
   }
 
   function toggleItem(i: number) {
@@ -384,12 +434,49 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
                 <div className="rounded-2xl overflow-hidden border border-[var(--color-border)]">
                   <img src={image} alt="Чек" className="w-full" />
                 </div>
-                <div className="flex gap-3">
-                  <button className="btn btn-primary flex-1" onClick={recognize} disabled={scanning}>
-                    {scanning ? 'Распознаю...' : 'Распознать'}
-                  </button>
-                  <button className="btn btn-secondary" onClick={() => setImage(null)}>
-                    Заново
+                
+                {qrString ? (
+                  <div className="card bg-[var(--color-primary-light)] border-[var(--color-primary)] flex flex-col gap-2">
+                    <p className="text-sm font-semibold text-[var(--color-primary)] flex items-center gap-2">
+                      <span>✓ QR-код обнаружен!</span>
+                    </p>
+                    <p className="text-xs text-muted">
+                      Для 100% точности нажмите кнопку ниже, скопируйте результат и вставьте его в поле ниже.
+                    </p>
+                    <a 
+                      href={`https://proverkacheka.com/?qr=${encodeURIComponent(qrString)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary text-center py-2 text-sm no-underline"
+                    >
+                      Открыть на proverkacheka.com
+                    </a>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button className="btn btn-primary flex-1" onClick={recognize} disabled={scanning}>
+                      {scanning ? 'Распознаю...' : 'Распознать'}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => { setImage(null); setQrString(null) }}>
+                      Заново
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 pt-2">
+                  <p className="text-xs text-muted font-medium">Или вставьте результат (HTML/Текст):</p>
+                  <textarea
+                    className="input text-xs min-h-[60px] font-mono"
+                    placeholder="Вставьте сюда содержимое страницы..."
+                    value={pastedHTML}
+                    onChange={(e) => setPastedHTML(e.target.value)}
+                  />
+                  <button 
+                    className="btn btn-secondary py-2 text-xs"
+                    disabled={!pastedHTML.trim()}
+                    onClick={handlePaste}
+                  >
+                    Извлечь товары
                   </button>
                 </div>
               </>

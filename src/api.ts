@@ -102,6 +102,7 @@ export const api = {
   },
 
   health() {
+
     return request<{ status: string }>('/api/health')
   },
 }
