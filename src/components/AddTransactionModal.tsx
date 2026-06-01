@@ -11,6 +11,8 @@ async function getQRCodeFromImage(dataUrl: string): Promise<string | null> {
     const img = new Image()
     img.onload = () => {
       const canvas = document.createElement('canvas')
+      // If image is too large, it might have too much noise for jsQR
+      // but let's try native resolution first with enhancement
       canvas.width = img.width
       canvas.height = img.height
       const ctx = canvas.getContext('2d')
@@ -19,8 +21,22 @@ async function getQRCodeFromImage(dataUrl: string): Promise<string | null> {
         return
       }
       ctx.drawImage(img, 0, 0)
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const code = jsQR(imageData.data, imageData.width, imageData.height)
+      
+      let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      
+      // Preprocess: Convert to grayscale and boost contrast
+      // jsQR likes high contrast
+      const data = imageData.data
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i+1] + data[i+2]) / 3
+        // Simple thresholding/contrast boost
+        const v = avg < 128 ? Math.max(0, avg - 40) : Math.min(255, avg + 40)
+        data[i] = data[i+1] = data[i+2] = v
+      }
+      
+      const code = jsQR(data, imageData.width, imageData.height, {
+        inversionAttempts: 'attemptBoth'
+      })
       resolve(code ? code.data : null)
     }
     img.onerror = () => resolve(null)

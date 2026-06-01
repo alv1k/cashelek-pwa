@@ -26,11 +26,20 @@ export default function ReceiptCamera({ onCapture, onQRCodeDetected, onClose }: 
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
       const ctx = canvas.getContext('2d', { willReadFrequently: true })
-      if (ctx) {
+        if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert',
+        const data = imageData.data
+        
+        // Simple contrast boost for real-time QR scan
+        for (let i = 0; i < data.length; i += 4) {
+          const avg = (data[i] + data[i+1] + data[i+2]) / 3
+          const v = avg < 128 ? Math.max(0, avg - 30) : Math.min(255, avg + 30)
+          data[i] = data[i+1] = data[i+2] = v
+        }
+
+        const code = jsQR(data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth',
         })
 
         if (code) {
