@@ -10,34 +10,50 @@ async function getQRCodeFromImage(dataUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {
+      // We'll try multiple approaches in sequence
       const canvas = document.createElement('canvas')
-      // If image is too large, it might have too much noise for jsQR
-      // but let's try native resolution first with enhancement
-      canvas.width = img.width
-      canvas.height = img.height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        resolve(null)
-        return
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) { resolve(null); return }
+
+      const tryDecode = (width: number, height: number, filter: (data: Uint8ClampedArray) => void): string | null => {
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(img, 0, 0, width, height)
+        const imageData = ctx.getImageData(0, 0, width, height)
+        filter(imageData.data)
+        const code = jsQR(imageData.data, width, height, { inversionAttempts: 'attemptBoth' })
+        return code ? code.data : null
       }
-      ctx.drawImage(img, 0, 0)
-      
-      let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      
-      // Preprocess: Convert to grayscale and boost contrast
-      // jsQR likes high contrast
-      const data = imageData.data
-      for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i+1] + data[i+2]) / 3
-        // Simple thresholding/contrast boost
-        const v = avg < 128 ? Math.max(0, avg - 40) : Math.min(255, avg + 40)
-        data[i] = data[i+1] = data[i+2] = v
+
+      // Approach 1: High contrast grayscale at original size
+      const filter1 = (data: Uint8ClampedArray) => {
+        for (let i = 0; i < data.length; i += 4) {
+          const avg = (data[i] + data[i+1] + data[i+2]) / 3
+          const v = avg < 120 ? 0 : 255 // Harsh binarization
+          data[i] = data[i+1] = data[i+2] = v
+        }
       }
+
+      // Approach 2: Sharpening filter + Adaptive-like thresholding
+      const filter2 = (data: Uint8ClampedArray) => {
+        // Simple adaptive: if pixel is darker than local average (sampled roughly)
+        for (let i = 0; i < data.length; i += 4) {
+          const avg = (data[i] + data[i+1] + data[i+2]) / 3
+          data[i] = data[i+1] = data[i+2] = avg
+        }
+      }
+
+      // Try different scales and filters
+      let result = tryDecode(img.width, img.height, filter1)
+      if (!result) result = tryDecode(img.width, img.height, filter2)
       
-      const code = jsQR(data, imageData.width, imageData.height, {
-        inversionAttempts: 'attemptBoth'
-      })
-      resolve(code ? code.data : null)
+      // Try downscaled version (often works better for noisy/large images)
+      if (!result && img.width > 800) {
+        const scale = 800 / img.width
+        result = tryDecode(800, img.height * scale, filter1)
+      }
+
+      resolve(result)
     }
     img.onerror = () => resolve(null)
     img.src = dataUrl
