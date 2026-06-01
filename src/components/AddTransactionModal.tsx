@@ -161,15 +161,26 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     setShowCamera(false)
   }
 
+  function handleQRCodeDetected(qrData: string, imageDataUrl: string) {
+    setQrString(qrData)
+    setImage(imageDataUrl)
+    // When real-time QR is detected, let's keep the camera open for a second 
+    // so user sees the "FOUND" state, then close it and show the result.
+    setTimeout(() => {
+      setShowCamera(false)
+    }, 1000)
+  }
+
   async function recognize() {
     if (!image) return
     setScanning(true)
     try {
-      // Step 1: Detect QR Code
-      const qrData = await getQRCodeFromImage(image)
-      if (qrData) {
-        setQrString(qrData)
-        // We don't return here, we still try OCR as a fallback
+      // Step 1: Detect QR Code (if not already detected by real-time)
+      if (!qrString) {
+        const qrData = await getQRCodeFromImage(image)
+        if (qrData) {
+          setQrString(qrData)
+        }
       }
 
       // Step 2: OCR with Tesseract
@@ -177,7 +188,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
       const ocrText = data.text
 
       if (!ocrText.trim()) {
-        if (!qrData) alert('Не удалось распознать текст')
+        if (!qrString) alert('Не удалось распознать текст')
         setScanning(false)
         return
       }
@@ -193,7 +204,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
 
       if (items.length > 0) {
         setScannedItems(items)
-      } else if (!qrData) {
+      } else if (!qrString) {
         alert('Не найдено товаров на чеке')
       }
     } catch {
@@ -425,6 +436,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
             {showCamera && (
               <ReceiptCamera
                 onCapture={handleCameraCapture}
+                onQRCodeDetected={handleQRCodeDetected}
                 onClose={() => setShowCamera(false)}
               />
             )}

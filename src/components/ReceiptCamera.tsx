@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import jsQR from 'jsqr'
 
 interface Props {
   onCapture: (imageDataUrl: string) => void
+  onQRCodeDetected?: (qrData: string, imageDataUrl: string) => void
   onClose: () => void
 }
 
-export default function ReceiptCamera({ onCapture, onClose }: Props) {
+export default function ReceiptCamera({ onCapture, onQRCodeDetected, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -13,14 +15,51 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
   const [torchOn, setTorchOn] = useState(false)
   const [torchSupported, setTorchSupported] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  const [qrDetected, setQrDetected] = useState(false)
+
+  const scanFrame = useCallback(() => {
+    if (!videoRef.current || !onQRCodeDetected || qrDetected) return
+
+    const video = videoRef.current
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert',
+        })
+
+        if (code) {
+          setQrDetected(true)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+          onQRCodeDetected(code.data, dataUrl)
+          // Don't stop the loop immediately, let the parent handle it
+        }
+      }
+    }
+
+    if (!qrDetected) {
+      requestAnimationFrame(scanFrame)
+    }
+  }, [onQRCodeDetected, qrDetected])
 
   const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 1280 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          // Try to stabilize exposure
+          advanced: [
+            { exposureMode: 'continuous' } as any,
+            { whiteBalanceMode: 'continuous' } as any,
+            { focusMode: 'continuous' } as any
+          ]
         },
       })
       streamRef.current = stream
@@ -28,6 +67,11 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
         videoRef.current.srcObject = stream
         await videoRef.current.play()
         setReady(true)
+        
+        // Start scanning loop if callback is provided
+        if (onQRCodeDetected) {
+          requestAnimationFrame(scanFrame)
+        }
       }
 
       // Check torch support
@@ -36,14 +80,15 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
       if (caps?.torch) {
         setTorchSupported(true)
       }
-    } catch {
-      alert('Нет доступа к камере')
+    } catch (e) {
+      console.error('Camera error:', e)
+      alert('Нет доступа к камере или ошибка инициализации')
       onClose()
     }
-  }, [onClose])
+  }, [onClose, onQRCodeDetected, scanFrame])
 
   useEffect(() => {
-    void Promise.resolve().then(() => startCamera())
+    void startCamera()
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
@@ -71,76 +116,53 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
 
     setCapturing(true)
 
-    // Capture at full video resolution
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')!
     ctx.drawImage(video, 0, 0)
 
-    // Enhance for receipt readability: boost contrast & sharpen
+    // Apply a more subtle enhancement
     enhanceForReceipt(ctx, canvas.width, canvas.height)
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
 
-    // Stop camera
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
 
-    // Brief flash animation, then return
     setTimeout(() => {
       onCapture(dataUrl)
-    }, 200)
+    }, 150)
   }
 
   function enhanceForReceipt(ctx: CanvasRenderingContext2D, w: number, h: number) {
     const imageData = ctx.getImageData(0, 0, w, h)
     const data = imageData.data
 
-    // Measure average brightness first
-    let sum = 0
-    for (let i = 0; i < data.length; i += 16) { // sample every 4th pixel
-      sum += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
-    }
-    const avgBrightness = sum / (data.length / 16)
-
-    // Adaptive correction based on actual brightness
-    // Dark image (< 90): brighten more, mild contrast
-    // Normal (90-170): light contrast only
-    // Bright (> 170): no brightening, reduce overexposure
-    let contrast: number
-    let brightness: number
-
-    if (avgBrightness < 90) {
-      contrast = 1.15
-      brightness = Math.round((128 - avgBrightness) * 0.4)
-    } else if (avgBrightness > 170) {
-      contrast = 1.1
-      brightness = Math.round((128 - avgBrightness) * 0.3)
-    } else {
-      contrast = 1.1
-      brightness = 0
+    // Simple auto-contrast: find min/max brightness
+    let min = 255
+    let max = 0
+    for (let i = 0; i < data.length; i += 40) { // faster sampling
+      const b = (data[i] + data[i + 1] + data[i + 2]) / 3
+      if (b < min) min = b
+      if (b > max) max = b
     }
 
-    const factor = (259 * (contrast * 128 + 255)) / (255 * (259 - contrast * 128))
-
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = clamp(factor * (data[i] - 128) + 128 + brightness)
-      data[i + 1] = clamp(factor * (data[i + 1] - 128) + 128 + brightness)
-      data[i + 2] = clamp(factor * (data[i + 2] - 128) + 128 + brightness)
+    // Only apply if there's enough range to expand
+    if (max - min > 30 && max - min < 240) {
+      const factor = 255 / (max - min)
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = (data[i] - min) * factor
+        data[i + 1] = (data[i + 1] - min) * factor
+        data[i + 2] = (data[i + 2] - min) * factor
+      }
+      ctx.putImageData(imageData, 0, 0)
     }
-
-    ctx.putImageData(imageData, 0, 0)
-  }
-
-  function clamp(v: number) {
-    return Math.max(0, Math.min(255, v))
   }
 
   return (
     <div className="receipt-camera">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Video feed */}
       <video
         ref={videoRef}
         className="receipt-camera-video"
@@ -149,22 +171,27 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
         autoPlay
       />
 
-      {/* Frame overlay */}
       <div className="receipt-camera-overlay">
-        <div className="receipt-camera-frame">
-          {/* Corner marks */}
+        <div className={`receipt-camera-frame ${qrDetected ? 'border-[var(--color-primary)] shadow-[0_0_20px_var(--color-primary)]' : ''}`}>
           <span className="frame-corner frame-tl" />
           <span className="frame-corner frame-tr" />
           <span className="frame-corner frame-bl" />
           <span className="frame-corner frame-br" />
+          {qrDetected && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-primary)]/10">
+              <span className="text-white font-bold text-lg bg-[var(--color-primary)] px-4 py-2 rounded-full shadow-lg">
+                QR-КОД НАЙДЕН
+              </span>
+            </div>
+          )}
         </div>
-        <p className="receipt-camera-hint">Наведите камеру на чек</p>
+        <p className="receipt-camera-hint">
+          {qrDetected ? 'Обработка чека...' : 'Наведите камеру на QR-код или текст'}
+        </p>
       </div>
 
-      {/* Capture flash */}
       {capturing && <div className="receipt-camera-flash" />}
 
-      {/* Top bar */}
       <div className="receipt-camera-topbar">
         <button className="receipt-camera-btn" onClick={onClose}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -185,12 +212,11 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
         )}
       </div>
 
-      {/* Bottom controls */}
       <div className="receipt-camera-bottom">
         <button
           className="receipt-camera-shutter"
           onClick={capture}
-          disabled={!ready || capturing}
+          disabled={!ready || capturing || qrDetected}
         >
           <span className="receipt-camera-shutter-inner" />
         </button>
@@ -198,3 +224,4 @@ export default function ReceiptCamera({ onCapture, onClose }: Props) {
     </div>
   )
 }
+
