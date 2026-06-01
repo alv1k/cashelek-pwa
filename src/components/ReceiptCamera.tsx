@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import jsQR from 'jsqr'
+import { BrowserMultiFormatReader } from '@zxing/library'
 
 interface Props {
   onCapture: (imageDataUrl: string) => void
@@ -11,48 +11,50 @@ export default function ReceiptCamera({ onCapture, onQRCodeDetected, onClose }: 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null)
   const [ready, setReady] = useState(false)
   const [torchOn, setTorchOn] = useState(false)
   const [torchSupported, setTorchSupported] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const [qrDetected, setQrDetected] = useState(false)
 
-  const scanFrame = useCallback(() => {
-    if (!videoRef.current || !onQRCodeDetected || qrDetected) return
+  const startScanning = useCallback(async () => {
+    if (!videoRef.current || !onQRCodeDetected || !streamRef.current) return
 
-    const video = videoRef.current
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      const canvas = document.createElement('canvas')
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })
-        if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const data = imageData.data
-        
-        // Simple contrast boost for real-time QR scan
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = (data[i] + data[i+1] + data[i+2]) / 3
-          const v = avg < 128 ? Math.max(0, avg - 30) : Math.min(255, avg + 30)
-          data[i] = data[i+1] = data[i+2] = v
-        }
+    const reader = new BrowserMultiFormatReader()
+    readerRef.current = reader
 
-        const code = jsQR(data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth',
-        })
+    try {
+      // Use the existing stream from startCamera
+      await reader.decodeFromStream(streamRef.current, videoRef.current, (result, error) => {
+        if (result && !qrDetected) {
+          // Check result.getText() to avoid duplicate detection if it fires multiple times
+          const text = result.getText()
+          if (!text) return
 
-        if (code) {
           setQrDetected(true)
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
-          onQRCodeDetected(code.data, dataUrl)
-          // Don't stop the loop immediately, let the parent handle it
-        }
-      }
-    }
 
-    if (!qrDetected) {
-      requestAnimationFrame(scanFrame)
+          const video = videoRef.current
+          if (video) {
+            const canvas = document.createElement('canvas')
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(video, 0, 0)
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+              onQRCodeDetected(text, dataUrl)
+            }
+          }
+          reader.reset()
+        }
+        if (error && (error as any).name !== 'NotFoundException') {
+          // Only log real errors, not the common 'QR not found in frame'
+          console.debug('ZXing scan frame error:', error)
+        }
+      })
+    } catch (e) {
+      console.warn('ZXing setup error:', e)
     }
   }, [onQRCodeDetected, qrDetected])
 
@@ -63,7 +65,6 @@ export default function ReceiptCamera({ onCapture, onQRCodeDetected, onClose }: 
           facingMode: 'environment',
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          // Try to stabilize exposure
           advanced: [
             { exposureMode: 'continuous' } as any,
             { whiteBalanceMode: 'continuous' } as any,
@@ -76,14 +77,12 @@ export default function ReceiptCamera({ onCapture, onQRCodeDetected, onClose }: 
         videoRef.current.srcObject = stream
         await videoRef.current.play()
         setReady(true)
-        
-        // Start scanning loop if callback is provided
+
         if (onQRCodeDetected) {
-          requestAnimationFrame(scanFrame)
+          void startScanning()
         }
       }
 
-      // Check torch support
       const track = stream.getVideoTracks()[0]
       const caps = track.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean }
       if (caps?.torch) {
@@ -94,15 +93,17 @@ export default function ReceiptCamera({ onCapture, onQRCodeDetected, onClose }: 
       alert('Нет доступа к камере или ошибка инициализации')
       onClose()
     }
-  }, [onClose, onQRCodeDetected, scanFrame])
+  }, [onClose, onQRCodeDetected, startScanning])
 
   useEffect(() => {
     void startCamera()
     return () => {
+      readerRef.current?.reset()
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
   }, [startCamera])
+
 
   async function toggleTorch() {
     const track = streamRef.current?.getVideoTracks()[0]

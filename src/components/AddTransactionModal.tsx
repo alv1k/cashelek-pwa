@@ -1,80 +1,21 @@
 import { useState, useRef, useEffect } from 'react'
 import Tesseract from 'tesseract.js'
-import jsQR from 'jsqr'
+import { BrowserMultiFormatReader } from '@zxing/library'
 import { api } from '../api'
 import Select from './Select'
 import ReceiptCamera from './ReceiptCamera'
 import { parseProverkachekaHTML } from '../receiptParser'
 
 async function getQRCodeFromImage(dataUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      // We'll try multiple approaches in sequence
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })
-      if (!ctx) { resolve(null); return }
-
-      const tryDecode = (width: number, height: number, filter: (data: Uint8ClampedArray) => void): string | null => {
-        canvas.width = width
-        canvas.height = height
-        ctx.drawImage(img, 0, 0, width, height)
-        const imageData = ctx.getImageData(0, 0, width, height)
-        filter(imageData.data)
-        const code = jsQR(imageData.data, width, height, { inversionAttempts: 'attemptBoth' })
-        return code ? code.data : null
-      }
-
-      // Approach 1: High contrast grayscale at original size
-      const filter1 = (data: Uint8ClampedArray) => {
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = (data[i] + data[i+1] + data[i+2]) / 3
-          const v = avg < 120 ? 0 : 255 // Harsh binarization
-          data[i] = data[i+1] = data[i+2] = v
-        }
-      }
-
-      // Approach 2: Sharpening filter + Gray boost
-      const filter2 = (data: Uint8ClampedArray) => {
-        // Simple 3x3 sharpening (can be slow on large images, but we only do it if others fail)
-        const tempData = new Uint8ClampedArray(data)
-        const w = img.width
-        for (let i = w * 4; i < data.length - w * 4; i += 4) {
-          // Sharp kernel: [0, -1, 0, -1, 5, -1, 0, -1, 0]
-          const val = 5 * tempData[i] - tempData[i-4] - tempData[i+4] - tempData[i-w*4] - tempData[i+w*4]
-          const v = Math.max(0, Math.min(255, val))
-          data[i] = data[i+1] = data[i+2] = v
-        }
-      }
-
-      // Approach 3: Pseudo-adaptive thresholding
-      const filter3 = (data: Uint8ClampedArray) => {
-        const threshold = 128
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = (data[i] + data[i+1] + data[i+2]) / 3
-          // If pixel is darker than 128, make it pitch black, otherwise white
-          const v = avg < threshold ? 0 : 255
-          data[i] = data[i+1] = data[i+2] = v
-        }
-      }
-
-      // Try different scales and filters in a more exhaustive way
-      let result = tryDecode(img.width, img.height, () => {}) // Original
-      if (!result) result = tryDecode(img.width, img.height, filter1)
-      if (!result) result = tryDecode(img.width, img.height, filter3)
-      
-      // Try downscaling + sharpening if still no result
-      if (!result) {
-        const targetWidth = Math.min(img.width, 1000)
-        const scale = targetWidth / img.width
-        result = tryDecode(targetWidth, img.height * scale, filter2)
-      }
-
-      resolve(result)
-    }
-    img.onerror = () => resolve(null)
-    img.src = dataUrl
-  })
+  const reader = new BrowserMultiFormatReader()
+  try {
+    // ZXing handles multiple scales, binarization and perspective internally
+    const result = await reader.decodeFromImageUrl(dataUrl)
+    return result.getText()
+  } catch (e) {
+    console.warn('ZXing static scan error:', e)
+    return null
+  }
 }
 
 interface Props {
