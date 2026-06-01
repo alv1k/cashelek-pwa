@@ -59,7 +59,7 @@ async function getQRCodeFromImage(dataUrl: string): Promise<string | null> {
       }
 
       // Try different scales and filters in a more exhaustive way
-      let result = tryDecode(img.width, img.height, (d) => {}) // Original
+      let result = tryDecode(img.width, img.height, () => {}) // Original
       if (!result) result = tryDecode(img.width, img.height, filter1)
       if (!result) result = tryDecode(img.width, img.height, filter3)
       
