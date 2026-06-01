@@ -34,23 +34,40 @@ async function getQRCodeFromImage(dataUrl: string): Promise<string | null> {
         }
       }
 
-      // Approach 2: Sharpening filter + Adaptive-like thresholding
+      // Approach 2: Sharpening filter + Gray boost
       const filter2 = (data: Uint8ClampedArray) => {
-        // Simple adaptive: if pixel is darker than local average (sampled roughly)
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = (data[i] + data[i+1] + data[i+2]) / 3
-          data[i] = data[i+1] = data[i+2] = avg
+        // Simple 3x3 sharpening (can be slow on large images, but we only do it if others fail)
+        const tempData = new Uint8ClampedArray(data)
+        const w = img.width
+        for (let i = w * 4; i < data.length - w * 4; i += 4) {
+          // Sharp kernel: [0, -1, 0, -1, 5, -1, 0, -1, 0]
+          const val = 5 * tempData[i] - tempData[i-4] - tempData[i+4] - tempData[i-w*4] - tempData[i+w*4]
+          const v = Math.max(0, Math.min(255, val))
+          data[i] = data[i+1] = data[i+2] = v
         }
       }
 
-      // Try different scales and filters
-      let result = tryDecode(img.width, img.height, filter1)
-      if (!result) result = tryDecode(img.width, img.height, filter2)
+      // Approach 3: Pseudo-adaptive thresholding
+      const filter3 = (data: Uint8ClampedArray) => {
+        const threshold = 128
+        for (let i = 0; i < data.length; i += 4) {
+          const avg = (data[i] + data[i+1] + data[i+2]) / 3
+          // If pixel is darker than 128, make it pitch black, otherwise white
+          const v = avg < threshold ? 0 : 255
+          data[i] = data[i+1] = data[i+2] = v
+        }
+      }
+
+      // Try different scales and filters in a more exhaustive way
+      let result = tryDecode(img.width, img.height, (d) => {}) // Original
+      if (!result) result = tryDecode(img.width, img.height, filter1)
+      if (!result) result = tryDecode(img.width, img.height, filter3)
       
-      // Try downscaled version (often works better for noisy/large images)
-      if (!result && img.width > 800) {
-        const scale = 800 / img.width
-        result = tryDecode(800, img.height * scale, filter1)
+      // Try downscaling + sharpening if still no result
+      if (!result) {
+        const targetWidth = Math.min(img.width, 1000)
+        const scale = targetWidth / img.width
+        result = tryDecode(targetWidth, img.height * scale, filter2)
       }
 
       resolve(result)
@@ -196,11 +213,30 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
   function handleQRCodeDetected(qrData: string, imageDataUrl: string) {
     setQrString(qrData)
     setImage(imageDataUrl)
-    // When real-time QR is detected, let's keep the camera open for a second 
-    // so user sees the "FOUND" state, then close it and show the result.
+    
+    // Copy to clipboard automatically for convenience
+    try {
+      navigator.clipboard.writeText(qrData)
+    } catch (e) {
+      console.warn('Failed to copy QR to clipboard', e)
+    }
+
     setTimeout(() => {
       setShowCamera(false)
     }, 1000)
+  }
+
+  // Helper to parse Russian QR string for display or direct links
+  const parseQR = (qr: string) => {
+    const params = new URLSearchParams(qr)
+    return {
+      t: params.get('t'),
+      s: params.get('s'),
+      fn: params.get('fn'),
+      i: params.get('i'), // fd
+      fp: params.get('fp'),
+      n: params.get('n')
+    }
   }
 
   async function recognize() {
@@ -485,16 +521,30 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
                       <span>✓ QR-код обнаружен!</span>
                     </p>
                     <p className="text-xs text-muted">
-                      Для 100% точности нажмите кнопку ниже, скопируйте результат и вставьте его в поле ниже.
+                      Данные скопированы. Нажмите кнопку ниже, а затем вставьте их в поле на сайте или просто просмотрите результат.
                     </p>
-                    <a 
-                      href={`https://proverkacheka.com/?qr=${encodeURIComponent(qrString)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-primary text-center py-2 text-sm no-underline"
-                    >
-                      Открыть на proverkacheka.com
-                    </a>
+                    <div className="flex flex-col gap-2 pt-1">
+                      {(() => {
+                        const q = parseQR(qrString)
+                        const directUrl = `https://proverkacheka.com/check/get?t=${q.t}&s=${q.s}&fn=${q.fn}&i=${q.i}&fp=${q.fp}&n=${q.n}`
+                        return (
+                          <a 
+                            href={directUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-primary text-center py-2 text-sm no-underline"
+                          >
+                            Получить чек на proverkacheka.com
+                          </a>
+                        )
+                      })()}
+                      <button 
+                        className="btn btn-secondary py-2 text-xs"
+                        onClick={() => { setImage(null); setQrString(null) }}
+                      >
+                        Сканировать другой
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex gap-3">
