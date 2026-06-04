@@ -1,8 +1,17 @@
 import pool from './db.js'
 
 const schema = `
+CREATE TABLE IF NOT EXISTS users (
+  id            TEXT PRIMARY KEY,
+  email         TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  name          TEXT,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS transactions (
   id       TEXT PRIMARY KEY,
+  user_id  TEXT REFERENCES users(id),
   name     TEXT NOT NULL,
   date     DATE NOT NULL,
   price    NUMERIC(10,2),
@@ -12,6 +21,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   comment  TEXT DEFAULT ''
 );
 
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
 `

@@ -3,9 +3,11 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function LoginPage() {
-  const { user, loading, login } = useAuth()
+  const { user, loading, login, register } = useAuth()
+  const [isRegister, setIsRegister] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -17,9 +19,13 @@ export default function LoginPage() {
     setError('')
     setSubmitting(true)
     try {
-      await login(email, password)
-    } catch {
-      setError('Неверный email или пароль')
+      if (isRegister) {
+        await register(email, password, name)
+      } else {
+        await login(email, password)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Произошла ошибка')
     } finally {
       setSubmitting(false)
     }
@@ -30,10 +36,38 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
         <h1 className="text-2xl font-bold text-center mb-6">Finance PWA</h1>
 
+        <div className="flex bg-[var(--color-surface)] p-1 rounded-lg mb-4">
+          <button
+            type="button"
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${!isRegister ? 'bg-[var(--color-surface-light)] text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`}
+            onClick={() => { setIsRegister(false); setError('') }}
+          >
+            Вход
+          </button>
+          <button
+            type="button"
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${isRegister ? 'bg-[var(--color-surface-light)] text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`}
+            onClick={() => { setIsRegister(true); setError('') }}
+          >
+            Регистрация
+          </button>
+        </div>
+
         {error && (
           <div className="text-sm text-[var(--color-danger)] bg-red-500/10 rounded-lg p-3 text-center">
             {error}
           </div>
+        )}
+
+        {isRegister && (
+          <input
+            type="text"
+            placeholder="Ваше имя"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required={isRegister}
+            className="w-full px-4 py-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-surface-light)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+          />
         )}
 
         <input
@@ -52,7 +86,7 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          autoComplete="current-password"
+          autoComplete={isRegister ? 'new-password' : 'current-password'}
           className="w-full px-4 py-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-surface-light)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
         />
 
@@ -61,7 +95,7 @@ export default function LoginPage() {
           disabled={submitting}
           className="w-full py-3 rounded-lg bg-[var(--color-primary)] text-white font-medium hover:bg-[var(--color-primary-dark)] disabled:opacity-50 transition-colors"
         >
-          {submitting ? 'Вход...' : 'Войти'}
+          {submitting ? 'Загрузка...' : isRegister ? 'Создать аккаунт' : 'Войти'}
         </button>
       </form>
     </div>

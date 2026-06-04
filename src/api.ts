@@ -11,16 +11,43 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl()
 
+let authToken = localStorage.getItem('token')
+
+export const setToken = (token: string | null) => {
+  authToken = token
+  if (token) {
+    localStorage.setItem('token', token)
+  } else {
+    localStorage.removeItem('token')
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: { ...headers, ...options?.headers },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw new Error(err.error || res.statusText)
   }
   return res.json()
+}
+
+export interface User {
+  id: string
+  email: string
+  name?: string
+}
+
+export interface AuthResponse {
+  token: string
+  user: User
 }
 
 export interface Transaction {
@@ -101,8 +128,25 @@ export const api = {
     })
   },
 
-  health() {
+  login(data: any) {
+    return request<AuthResponse>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
 
+  register(data: any) {
+    return request<User>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  getMe() {
+    return request<User>('/api/auth/me')
+  },
+
+  health() {
     return request<{ status: string }>('/api/health')
   },
 }

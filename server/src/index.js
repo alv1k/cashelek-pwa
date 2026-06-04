@@ -1,12 +1,75 @@
 import express from 'express'
 import cors from 'cors'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
 import pool from './db.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev'
 
 app.use(cors())
 app.use(express.json())
+
+// Middleware to verify JWT
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+
+  if (!token) return res.status(401).json({ error: 'Access denied' })
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' })
+    req.user = user
+    next()
+  })
+}
+
+// Auth Routes
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const userId = crypto.randomUUID()
+
+    const { rows } = await pool.query(
+      'INSERT INTO users (id, email, password_hash, name) VALUES ($1, $2, $3, $4) RETURNING id, email, name',
+      [userId, email, hashedPassword, name]
+    )
+    res.status(201).json(rows[0])
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Email already exists' })
+    }
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email])
+    const user = rows[0]
+
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid email or password' })
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' })
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [req.user.id])
+    res.json(rows[0])
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 
 // Health check
 app.get('/api/health', async (req, res) => {
@@ -19,12 +82,12 @@ app.get('/api/health', async (req, res) => {
 })
 
 // Get all transactions (with optional filters)
-app.get('/api/transactions', async (req, res) => {
+app.get('/api/transactions', authenticateToken, async (req, res) => {
   try {
     const { category, exclude_category, from, to, search, limit = 100, offset = 0 } = req.query
-    const conditions = []
-    const params = []
-    let i = 1
+    const conditions = ['user_id = $1']
+    const params = [req.user.id]
+    let i = 2
 
     if (category) {
       conditions.push(`category = $${i++}`)
@@ -47,7 +110,7 @@ app.get('/api/transactions', async (req, res) => {
       params.push(`%${search}%`)
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const where = `WHERE ${conditions.join(' AND ')}`
     params.push(parseInt(limit), parseInt(offset))
 
     const { rows } = await pool.query(
@@ -66,9 +129,9 @@ app.get('/api/transactions', async (req, res) => {
 })
 
 // Get single transaction
-app.get('/api/transactions/:id', async (req, res) => {
+app.get('/api/transactions/:id', authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM transactions WHERE id = $1', [req.params.id])
+    const { rows } = await pool.query('SELECT * FROM transactions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id])
     if (!rows.length) return res.status(404).json({ error: 'Not found' })
     res.json(rows[0])
   } catch (err) {
@@ -77,13 +140,13 @@ app.get('/api/transactions/:id', async (req, res) => {
 })
 
 // Create transaction
-app.post('/api/transactions', async (req, res) => {
+app.post('/api/transactions', authenticateToken, async (req, res) => {
   try {
     const { id, name, date, price, quantity, amount, category, comment } = req.body
     const { rows } = await pool.query(
-      `INSERT INTO transactions (id, name, date, price, quantity, amount, category, comment)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [id || crypto.randomUUID(), name, date, price, quantity, amount, category, comment || '']
+      `INSERT INTO transactions (id, user_id, name, date, price, quantity, amount, category, comment)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [id || crypto.randomUUID(), req.user.id, name, date, price, quantity, amount, category, comment || '']
     )
     res.status(201).json(rows[0])
   } catch (err) {
@@ -92,13 +155,13 @@ app.post('/api/transactions', async (req, res) => {
 })
 
 // Update transaction
-app.put('/api/transactions/:id', async (req, res) => {
+app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
   try {
     const { name, date, price, quantity, amount, category, comment } = req.body
     const { rows } = await pool.query(
       `UPDATE transactions SET name=$1, date=$2, price=$3, quantity=$4, amount=$5, category=$6, comment=$7
-       WHERE id=$8 RETURNING *`,
-      [name, date, price, quantity, amount, category, comment, req.params.id]
+       WHERE id=$8 AND user_id=$9 RETURNING *`,
+      [name, date, price, quantity, amount, category, comment, req.params.id, req.user.id]
     )
     if (!rows.length) return res.status(404).json({ error: 'Not found' })
     res.json(rows[0])
@@ -108,9 +171,9 @@ app.put('/api/transactions/:id', async (req, res) => {
 })
 
 // Delete transaction
-app.delete('/api/transactions/:id', async (req, res) => {
+app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM transactions WHERE id = $1', [req.params.id])
+    const { rowCount } = await pool.query('DELETE FROM transactions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id])
     if (!rowCount) return res.status(404).json({ error: 'Not found' })
     res.json({ ok: true })
   } catch (err) {
@@ -119,16 +182,16 @@ app.delete('/api/transactions/:id', async (req, res) => {
 })
 
 // Get categories list with stats
-app.get('/api/categories', async (req, res) => {
+app.get('/api/categories', authenticateToken, async (req, res) => {
   try {
     const { from, to, category } = req.query
-    const conditions = []
-    const params = []
-    let i = 1
+    const conditions = ['user_id = $1']
+    const params = [req.user.id]
+    let i = 2
     if (from) { conditions.push(`date >= $${i++}`); params.push(from) }
     if (to) { conditions.push(`date <= $${i++}`); params.push(to) }
     if (category) { conditions.push(`category = $${i++}`); params.push(category) }
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const where = `WHERE ${conditions.join(' AND ')}`
     const { rows } = await pool.query(
       `SELECT category, COUNT(*) as count, SUM(amount) as total
        FROM transactions ${where} GROUP BY category ORDER BY total DESC`,
@@ -141,16 +204,16 @@ app.get('/api/categories', async (req, res) => {
 })
 
 // Get summary by month
-app.get('/api/summary', async (req, res) => {
+app.get('/api/summary', authenticateToken, async (req, res) => {
   try {
     const { from, to, category } = req.query
-    const conditions = []
-    const params = []
-    let i = 1
+    const conditions = ['user_id = $1']
+    const params = [req.user.id]
+    let i = 2
     if (from) { conditions.push(`date >= $${i++}`); params.push(from) }
     if (to) { conditions.push(`date <= $${i++}`); params.push(to) }
     if (category) { conditions.push(`category = $${i++}`); params.push(category) }
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const where = `WHERE ${conditions.join(' AND ')}`
     const { rows } = await pool.query(
       `SELECT TO_CHAR(date, 'YYYY-MM') as month, category, COUNT(*) as count, SUM(amount) as total
        FROM transactions ${where} GROUP BY month, category ORDER BY month DESC, total DESC`,
