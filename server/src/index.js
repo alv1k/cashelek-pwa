@@ -26,6 +26,14 @@ const authenticateToken = (req, res, next) => {
   })
 }
 
+// Middleware to verify Admin role
+const authorizeAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied: Admin only' })
+  }
+  next()
+}
+
 // Auth Routes
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -34,8 +42,8 @@ app.post('/api/auth/register', async (req, res) => {
     const userId = crypto.randomUUID()
 
     const { rows } = await pool.query(
-      'INSERT INTO users (id, email, password_hash, name) VALUES ($1, $2, $3, $4) RETURNING id, email, name',
-      [userId, email, hashedPassword, name]
+      'INSERT INTO users (id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role',
+      [userId, email, hashedPassword, name, 'user']
     )
     res.status(201).json(rows[0])
   } catch (err) {
@@ -56,8 +64,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' })
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name } })
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '30d' })
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -65,8 +73,28 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [req.user.id])
+    const { rows } = await pool.query('SELECT id, email, name, role FROM users WHERE id = $1', [req.user.id])
     res.json(rows[0])
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Admin Routes
+app.get('/api/admin/users', authenticateToken, authorizeAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        u.id, u.email, u.name, u.role, u.created_at,
+        COUNT(t.id) as transaction_count,
+        SUM(t.amount) as total_amount,
+        MAX(t.date) as last_activity
+      FROM users u
+      LEFT JOIN transactions t ON u.id = t.user_id
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `)
+    res.json(rows)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

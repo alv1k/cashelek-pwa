@@ -8,6 +8,7 @@ import TransactionsPage from './pages/TransactionsPage'
 import IncomePage from './pages/IncomePage'
 import GroceryPage from './pages/GroceryPage'
 import ReceiptPage from './pages/ReceiptPage'
+import AdminPage from './pages/AdminPage'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
             <Route path="/income" element={<IncomePage />} />
             <Route path="/grocery" element={<GroceryPage />} />
             <Route path="/receipt" element={<ReceiptPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

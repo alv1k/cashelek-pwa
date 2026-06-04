@@ -43,6 +43,14 @@ export interface User {
   id: string
   email: string
   name?: string
+  role?: string
+}
+
+export interface AdminUserStat extends User {
+  created_at: string
+  transaction_count: string
+  total_amount: string
+  last_activity: string | null
 }
 
 export interface AuthResponse {
@@ -144,6 +152,10 @@ export const api = {
 
   getMe() {
     return request<User>('/api/auth/me')
+  },
+
+  getAdminUsers() {
+    return request<AdminUserStat[]>('/api/admin/users')
   },
 
   health() {

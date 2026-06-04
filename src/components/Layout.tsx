@@ -42,6 +42,13 @@ const IconGrocery = () => (
   </svg>
 )
 
+// Admin — shield icon
+const IconAdmin = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+)
+
 const navItems = [
   { to: '/', label: 'Аналитика', icon: IconAnalytics },
   { to: '/transactions', label: 'Траты', icon: IconExpenses },
@@ -54,12 +61,18 @@ const pageTitles: Record<string, string> = {
   '/transactions': 'Траты',
   '/income': 'Доходы',
   '/grocery': 'Покупки',
+  '/admin': 'Админ',
 }
 
 export default function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
   const title = pageTitles[location.pathname] || 'Finance'
+
+  const currentNavItems = [...navItems]
+  if (user?.role === 'admin') {
+    currentNavItems.push({ to: '/admin', label: 'Админ', icon: IconAdmin })
+  }
 
   return (
     <div className="flex flex-col h-dvh">
@@ -87,7 +100,7 @@ export default function Layout() {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex safe-area-bottom" style={{ paddingBlock: 10 }}>
-        {navItems.map((item) => (
+        {currentNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
