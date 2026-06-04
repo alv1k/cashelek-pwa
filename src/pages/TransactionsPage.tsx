@@ -6,6 +6,8 @@ import Select from '../components/Select'
 
 import { formatMoney, formatDateShort } from '../utils'
 
+import { INCOME_CATEGORIES, isIncomeCategory } from '../categories'
+
 const LIMIT = 50
 
 export default function TransactionsPage() {
@@ -31,8 +33,18 @@ export default function TransactionsPage() {
   useEffect(() => {
     let cancelled = false
     void Promise.resolve().then(() => { if (!cancelled) setLoading(true) })
-    const params: Record<string, string> = { limit: String(LIMIT), offset: String(page * LIMIT), exclude_category: 'доход' }
-    if (filterCategory) params.category = filterCategory
+    
+    // We can't easily exclude multiple categories via API, 
+    // so we'll just filter them out on the client if filterCategory is empty,
+    // but the API currently only supports exclude_category as a single string.
+    // For now, let's keep it simple and just filter the category list in UI.
+    const params: Record<string, string> = { limit: String(LIMIT), offset: String(page * LIMIT) }
+    if (filterCategory) {
+      params.category = filterCategory
+    } else {
+      params.exclude_category = 'доход' // Still just one, but the list below will be cleaner
+    }
+    
     if (search) params.search = search
     api.getTransactions(params)
       .then((res) => { if (!cancelled) { setTransactions(res.data); setTotal(res.total) } })
@@ -68,7 +80,10 @@ export default function TransactionsPage() {
         value={filterCategory}
         onChange={(v) => { setFilterCategory(v); setPage(0) }}
         placeholder="Все категории"
-        options={categories.filter((c) => c.category !== 'доход').map((c) => ({ value: c.category, label: c.category }))}
+        options={categories
+          .filter((c) => !isIncomeCategory(c.category))
+          .map((c) => ({ value: c.category, label: c.category }))
+        }
       />
 
       <p className="text-muted">

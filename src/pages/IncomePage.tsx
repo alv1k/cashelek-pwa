@@ -11,6 +11,8 @@ export default function IncomePage() {
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
 
+  const [filterCategory, setFilterCategory] = useState('')
+
   // Add form
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
@@ -26,10 +28,15 @@ export default function IncomePage() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    api.getTransactions({ limit: '500' })
+    const params: Record<string, string> = { limit: '500' }
+    if (filterCategory) params.category = filterCategory
+    
+    api.getTransactions(params)
       .then((res) => {
         if (!cancelled) {
-          const incomeTx = res.data.filter((t) => isIncomeCategory(t.category))
+          const incomeTx = filterCategory 
+            ? res.data 
+            : res.data.filter((t) => isIncomeCategory(t.category))
           setIncomes(incomeTx)
           setTotal(incomeTx.length)
         }
@@ -37,7 +44,7 @@ export default function IncomePage() {
       .catch((e) => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [refreshKey])
+  }, [refreshKey, filterCategory])
 
   const totalIncome = incomes.reduce((s, i) => s + Number(i.amount), 0)
 
@@ -115,6 +122,13 @@ export default function IncomePage() {
         </p>
         <p className="text-muted mt-2">{total} записей</p>
       </div>
+
+      <Select
+        value={filterCategory}
+        onChange={setFilterCategory}
+        placeholder="Все источники"
+        options={INCOME_CATEGORIES.map((c) => ({ value: c, label: c }))}
+      />
 
       {/* Add/Edit form */}
       {showForm && (
