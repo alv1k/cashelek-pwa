@@ -64,8 +64,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '30d' })
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+    // Auto-promote to admin if email matches ADMIN_EMAIL env var
+    let currentRole = user.role
+    const adminEmail = process.env.ADMIN_EMAIL
+    if (adminEmail && user.email === adminEmail && user.role !== 'admin') {
+      await pool.query("UPDATE users SET role = 'admin' WHERE id = $1", [user.id])
+      currentRole = 'admin'
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email, role: currentRole }, JWT_SECRET, { expiresIn: '30d' })
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: currentRole } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -74,7 +82,16 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT id, email, name, role FROM users WHERE id = $1', [req.user.id])
-    res.json(rows[0])
+    const user = rows[0]
+
+    // Double check auto-promotion on profile load
+    const adminEmail = process.env.ADMIN_EMAIL
+    if (adminEmail && user.email === adminEmail && user.role !== 'admin') {
+      await pool.query("UPDATE users SET role = 'admin' WHERE id = $1", [user.id])
+      user.role = 'admin'
+    }
+
+    res.json(user)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
