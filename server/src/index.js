@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import 'dotenv/config'
 import pool from './db.js'
 
 const app = express()
